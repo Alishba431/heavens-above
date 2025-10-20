@@ -2,7 +2,7 @@ name: Scheduled Scraper
 
 on:
   schedule:
-    - cron: '12 16 * * *'  # runs daily at 9:05 PM Pakistan time (16:05 UTC)
+    - cron: '19 16 * * *'  # runs daily at 9:05 PM Pakistan time (16:05 UTC)
   workflow_dispatch:       # allows manual run from GitHub Actions
 
 permissions:
@@ -36,5 +36,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: scraped-data
-          path: public/data
+          name: scraped-css
+          path: public/css
