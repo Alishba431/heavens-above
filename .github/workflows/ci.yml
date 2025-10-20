@@ -1,0 +1,60 @@
+name: CI - Tests & Lint
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  setup-and-check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: |
+          if npm run -s lint; then
+            echo "Lint passed"
+          else
+            echo "::error file=,line=1::Lint failed"
+            npm run -s lint || true
+            exit 1
+          fi
+
+      - name: Run tests
+        run: |
+          if npm test --silent; then
+            echo "Tests passed"
+          else
+            echo "::error ::Tests failed"
+            npm test || true
+            exit 1
+          fi
+
+      - name: Run npm audit (security)
+        run: npm audit --audit-level=high || true
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs
+          path: |
+            npm-debug.log
+            *.log
