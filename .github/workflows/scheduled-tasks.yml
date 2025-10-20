@@ -1,0 +1,37 @@
+name: Scheduled Scraper
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # daily at 02:00 UTC (adjust as needed)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install
+        run: npm ci
+
+      - name: Run scraper (run.js)
+        run: |
+          mkdir -p public/data
+          node run.js || true
+          ls -lah public || true
+
+      - name: Upload scraped data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraped-data
+          path: public/data
