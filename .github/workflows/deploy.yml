@@ -1,0 +1,79 @@
+name: Deploy Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  BUILD_DIR: public
+  DEPLOY_TARGET: github-pages   # change to "heroku" to use Heroku option
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install
+        run: npm ci
+
+      - name: Build / Prepare
+        run: |
+          # repo already uses run.js producing public/; ensure it runs without interactive prompts
+          node run.js || echo "run.js exited with non-zero; continuing to gather artifacts" 
+
+      - name: Run tests
+        run: npm test
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-site
+          path: ${{ env.BUILD_DIR }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: public-site
+
+      - name: Deploy to GitHub Pages
+        if: env.DEPLOY_TARGET == 'github-pages'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+
+      - name: Deploy to Heroku (optional)
+        if: env.DEPLOY_TARGET == 'heroku'
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          echo "Deploying to Heroku..."
+          # Please set HEROKU_APP_NAME and HEROKU_API_KEY in repo secrets.
+          if [ -z "${HEROKU_API_KEY}" ]; then
+            echo "HEROKU_API_KEY not set, skipping."
+            exit 1
+          fi
+          # Create a git remote and push to Heroku
+          git remote add heroku https://heroku:${HEROKU_API_KEY}@git.heroku.com/${{ secrets.HEROKU_APP_NAME }}.git || true
+          git add -A public
+          git commit -m "chore: deploy public build [ci skip]" || true
+          git push --force heroku HEAD:main
