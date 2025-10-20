@@ -2,7 +2,7 @@ name: Scheduled Scraper
 
 on:
   schedule:
-    - cron: '19 16 * * *'  # runs daily at 9:05 PM Pakistan time (16:05 UTC)
+    - cron: '30 16 * * *'  #  9:05 PM Pakistan time (16:05 UTC)
   workflow_dispatch:       # allows manual run from GitHub Actions
 
 permissions:
