@@ -2,7 +2,7 @@ name: Scheduled Scraper
 
 on:
   schedule:
-    - cron: '5 16 * * *'  # runs daily at 9:05 PM Pakistan time (16:05 UTC)
+    - cron: '12 16 * * *'  # runs daily at 9:05 PM Pakistan time (16:05 UTC)
   workflow_dispatch:       # allows manual run from GitHub Actions
 
 permissions:
@@ -27,7 +27,7 @@ jobs:
       - name: Run scraper (run.js)
         run: |
           echo "🕐 Starting scraper at $(date -u)"
-          mkdir -p public/data
+          mkdir -p public/css
           node run.js || echo "⚠️ run.js exited with non-zero status"
           echo "📁 Listing public folder:"
           ls -lah public || true
