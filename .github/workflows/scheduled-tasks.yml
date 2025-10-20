@@ -2,8 +2,8 @@ name: Scheduled Scraper
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # daily at 02:00 UTC (adjust as needed)
-  workflow_dispatch:
+    - cron: '5 16 * * *'  # runs daily at 9:05 PM Pakistan time (16:05 UTC)
+  workflow_dispatch:       # allows manual run from GitHub Actions
 
 permissions:
   contents: read
@@ -11,6 +11,7 @@ permissions:
 jobs:
   run-scraper:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,13 +21,15 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install
-        run: npm ci
+      - name: Install dependencies
+        run: npm install
 
       - name: Run scraper (run.js)
         run: |
+          echo "🕐 Starting scraper at $(date -u)"
           mkdir -p public/data
-          node run.js || true
+          node run.js || echo "⚠️ run.js exited with non-zero status"
+          echo "📁 Listing public folder:"
           ls -lah public || true
 
       - name: Upload scraped data
