@@ -3,6 +3,7 @@ name: PR Code Review Checks
 on:
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   actions: read
