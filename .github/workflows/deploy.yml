@@ -11,9 +11,10 @@ env:
   DEPLOY_TARGET: github-pages   # change to "heroku" to use Heroku option
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
+
 
 jobs:
   build:
