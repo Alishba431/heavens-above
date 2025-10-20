@@ -1,14 +1,11 @@
 version: 2
 updates:
-  # 👇 For npm, yarn, or pnpm projects
   - package-ecosystem: "npm"
-    directory: "/" # Location of your package.json
+    directory: "/"
     schedule:
-      interval: "weekly" # Can be daily, weekly, or monthly
+      interval: "weekly"  # or "daily" for more frequent checks
     open-pull-requests-limit: 5
-
-  # 👇 Optional: Enable updates for GitHub Actions too
-  - package-ecosystem: "github-actions"
-    directory: "/" # Location of your workflow files
-    schedule:
-      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    reviewers:
+      - "Alishba431"   # optional: assign yourself
