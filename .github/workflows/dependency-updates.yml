@@ -1,0 +1,28 @@
+name: Dependency PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  test-dep-update:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]' || contains(github.head_ref, 'dependabot')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
