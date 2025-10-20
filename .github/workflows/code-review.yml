@@ -1,9 +1,11 @@
 name: PR Code Review Checks
 
 on:
+  push:
+    branches: [ main ]   # ✅ Required for CodeQL to scan default branch
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:      # ✅ Allows manual runs
 
 permissions:
   actions: read
@@ -22,20 +24,20 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install
-        run: npm ci
+      - name: Install dependencies
+        run: npm ci || npm install
 
-      - name: ESLint
+      - name: Run ESLint
         run: |
           if npm run -s lint; then
-            echo "ESLint OK"
+            echo "✅ ESLint passed"
           else
             echo "::error ::ESLint failed"
             npm run -s lint || true
             exit 1
           fi
 
-      - name: npm audit
+      - name: Run npm audit
         run: npm audit --audit-level=moderate || true
 
   codeql:
@@ -44,14 +46,18 @@ jobs:
     permissions:
       contents: read
       security-events: write
+
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@v3      # ✅ updated from v2 → v3
         with:
           languages: javascript
 
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3  # ✅ added build step (best practice)
+
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3    # ✅ updated from v2 → v3
