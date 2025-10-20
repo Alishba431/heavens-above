@@ -8,7 +8,7 @@ on:
 
 env:
   BUILD_DIR: public
-  DEPLOY_TARGET: github-pages   # change to "heroku" to use Heroku option
+  DEPLOY_TARGET: github-pages   
 
 permissions:
   contents: write
