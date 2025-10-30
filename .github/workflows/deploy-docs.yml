@@ -15,17 +15,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Build docs
+      - name: Convert Markdown to HTML
         run: |
-          mkdir -p docs
-          echo "<!DOCTYPE html><html><body><h1>Heavens Above Documentation</h1><p>This is your auto-deployed README.md</p></body></html>" > docs/index.html
+          mkdir -p docs_html
+          pandoc docs/README.md -s -o docs_html/index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
+          publish_dir: ./docs_html
           publish_branch: gh-pages
+
+
+
+
+
+
+
+
