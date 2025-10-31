@@ -4,11 +4,11 @@ on:
   push:
     branches: [ main ]
     tags:
-      - 'v*' # Triggers when a new version tag is pushed (like v1.0.0)
-  workflow_dispatch:  # Allows manual trigger
+      - 'v*' # Trigger on version tags like v1.0.0
+  workflow_dispatch:
 
 permissions:
-  contents: write  # Required to create releases and write release notes
+  contents: write
 
 jobs:
   generate-release-notes:
@@ -28,26 +28,24 @@ jobs:
       uses: actions/github-script@v7
       with:
         script: |
-          const { context, github } = require('@actions/github');
-          
-          // Get commit messages
-          const commits = context.payload.commits || [];
-          const commitMessages = commits.map(c => `- ${c.message} (${c.id.slice(0,7)})`).join('\n');
+          const commits = github.context.payload.commits || [];
+          const actor = github.context.actor;
+          const date = new Date().toLocaleString("en-GB");
 
-          // Create formatted release notes
-          const releaseNotes = `
-          ## 🚀 Heavens Above – Automated Release Notes
-          **Date:** ${process.env.DATE || new Date().toLocaleString()}
-          **Triggered by:** ${context.actor}
+          let notes = `## 🚀 Heavens Above – Automated Release Notes\n`;
+          notes += `**Date:** ${date}\n`;
+          notes += `**Triggered by:** ${actor}\n\n`;
+          notes += `### 🧾 Summary of Changes:\n`;
 
-          ### 🧾 Summary of Changes:
-          ${commitMessages || 'No new commits detected.'}
+          if (commits.length > 0) {
+            notes += commits.map(c => `- ${c.message} (${c.id.slice(0,7)})`).join('\n');
+          } else {
+            notes += "No new commits detected.";
+          }
 
-          ---
-          _Generated automatically by GitHub Actions_
-          `;
+          notes += `\n\n---\n_Generated automatically by GitHub Actions_`;
 
-          core.setOutput("body", releaseNotes);
+          core.setOutput("body", notes);
 
     - name: Create GitHub Release
       uses: ncipollo/release-action@v1
@@ -58,4 +56,4 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Log Completion
-      run: echo "✅ Release notes generated and published successfully on ${{ steps.date.outputs.date }}"
+      run: echo "✅ Release notes generated successfully on ${{ steps.date.outputs.date }}"
