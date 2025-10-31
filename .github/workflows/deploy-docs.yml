@@ -1,41 +1,38 @@
-name: Deploy Documentation
+name: Deploy Docs to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches:
+      - main  # or your default branch
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create public directory
-        run: mkdir -p public
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
 
-      - name: Convert README.md to HTML
+      - name: Install and build
         run: |
-          echo "<!DOCTYPE html>" > public/index.html
-          echo "<html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>" >> public/index.html
-          echo "<title>Heavens Above Documentation</title>" >> public/index.html
-          echo "<style>
-            body { font-family: system-ui, sans-serif; margin: 40px; background: #f7f9fc; color: #222; line-height: 1.6; }
-            h1, h2, h3 { color: #1b4b91; }
-            pre { background: #eee; padding: 12px; border-radius: 6px; overflow-x: auto; }
-            code { color: #d6336c; font-weight: 500; }
-            .container { max-width: 800px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
-          </style></head><body><div class='container'>" >> public/index.html
-          echo "<h1>📘 Heavens Above Documentation</h1><hr>" >> public/index.html
-          cat README.md | sed 's/^# \(.*\)/<h1>\1<\/h1>/' | sed 's/^## \(.*\)/<h2>\1<\/h2>/' | sed 's/^### \(.*\)/<h3>\1<\/h3>/' >> public/index.html
-          echo "</div></body></html>" >> public/index.html
-
+          npm install
+          mkdir dist
+          cp README.md dist/index.md
+          npx docsify-cli init ./dist
+          # OR use another generator (mkdocs, docusaurus, etc.)
+      
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
+          publish_dir: ./dist
+
