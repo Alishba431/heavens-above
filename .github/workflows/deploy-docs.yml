@@ -1,14 +1,13 @@
-name: 📘 Deploy Documentation
+name: Deploy Documentation
 
 on:
   push:
     branches:
-      - main
-    paths:
-      - 'docs/**'
+      - main  # Deploy docs on push to main branch
+  workflow_dispatch:  # Allow manual run
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -22,10 +21,10 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload docs
+      - name: Upload documentation
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: ./docs  # Folder with docs
 
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
