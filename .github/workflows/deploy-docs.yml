@@ -2,29 +2,40 @@ name: Deploy Documentation
 
 on:
   push:
-    branches:
-      - main  # Deploy docs on push to main branch
-  workflow_dispatch:  # Allow manual run
+    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - name: Create public directory
+        run: mkdir -p public
 
-      - name: Upload documentation
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./docs  # Folder with docs
+      - name: Convert README.md to HTML
+        run: |
+          echo "<!DOCTYPE html>" > public/index.html
+          echo "<html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>" >> public/index.html
+          echo "<title>Heavens Above Documentation</title>" >> public/index.html
+          echo "<style>
+            body { font-family: system-ui, sans-serif; margin: 40px; background: #f7f9fc; color: #222; line-height: 1.6; }
+            h1, h2, h3 { color: #1b4b91; }
+            pre { background: #eee; padding: 12px; border-radius: 6px; overflow-x: auto; }
+            code { color: #d6336c; font-weight: 500; }
+            .container { max-width: 800px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
+          </style></head><body><div class='container'>" >> public/index.html
+          echo "<h1>📘 Heavens Above Documentation</h1><hr>" >> public/index.html
+          cat README.md | sed 's/^# \(.*\)/<h1>\1<\/h1>/' | sed 's/^## \(.*\)/<h2>\1<\/h2>/' | sed 's/^### \(.*\)/<h3>\1<\/h3>/' >> public/index.html
+          echo "</div></body></html>" >> public/index.html
 
       - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
