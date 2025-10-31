@@ -3,7 +3,7 @@ name: Documentation Deployment
 on:
   push:
     branches: [ main ]
-    paths: 
+    paths:
       - 'README.md'
       - 'docs/**'
       - '*.md'
@@ -16,107 +16,73 @@ permissions:
 
 jobs:
   build-docs:
-    name: Build Documentation
+    name: Build Project Documentation
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20.x'
-    
-    - name: Create documentation structure
-      run: |
-        echo " Building documentation..."
-        mkdir -p docs-site
-        
-        # Create main documentation page
-        cat > docs-site/index.html << 'EOF'
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Heavens Above - Documentation</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-                header { background: #f4f4f4; padding: 20px; border-radius: 5px; }
-                nav { margin: 20px 0; }
-                nav a { margin-right: 15px; text-decoration: none; color: #0366d6; }
-                .container { max-width: 800px; margin: 0 auto; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <header>
-                    <h1> Heavens Above</h1>
-                    <p>Web scraping scripts for astronomical data</p>
-                </header>
-                
-                <nav>
-                    <a href="#overview">Overview</a>
-                    <a href="#usage">Usage</a>
-                    <a href="#api">API</a>
-                    <a href="#contributing">Contributing</a>
-                </nav>
-                
-                <main>
-                    <section id="overview">
-                        <h2> Overview</h2>
-                        <p>This project contains scripts for scraping astronomical data from the Heavens Above website.</p>
-                    </section>
-                    
-                    <section id="usage">
-                        <h2> Usage</h2>
-                        <pre><code>npm start</code></pre>
-                        <p>Run the main script to start the web scraping process.</p>
-                    </section>
-                    
-                    <section id="api">
-                        <h2> API Reference</h2>
-                        <p>The project includes modules for:</p>
-                        <ul>
-                            <li>Iridium flare data scraping</li>
-                            <li>Satellite pass predictions</li>
-                            <li>Astronomical event tracking</li>
-                        </ul>
-                    </section>
-                    
-                    <section id="contributing">
-                        <h2> Contributing</h2>
-                        <p>Please read the README.md for contribution guidelines.</p>
-                    </section>
-                </main>
-                
-                <footer>
-                    <p><small>Last updated: $(date)</small></p>
-                </footer>
-            </div>
-        </body>
-        </html>
-        EOF
-        
-        # Convert README.md to HTML if it exists
-        if [ -f "README.md" ]; then
-            echo "Converting README.md to HTML..."
-            cp README.md docs-site/README.md
-        fi
-        
-        # Copy any existing markdown files
-        find . -name "*.md" -not -path "./node_modules/*" -not -path "./docs-site/*" -exec cp {} docs-site/ \; 2>/dev/null || echo "No additional markdown files found"
-        
-        echo " Documentation built successfully"
 
-    - name: Setup Pages
-      uses: actions/configure-pages@v4
-      
-    - name: Upload artifact
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: ./docs-site
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (optional)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Generate Static Documentation
+        run: |
+          echo "📘 Generating documentation site..."
+          mkdir -p docs-site
+
+          # Create a simple index.html documentation page
+          cat > docs-site/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Heavens Above - Project Documentation</title>
+              <style>
+                  body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; line-height: 1.6; }
+                  h1, h2 { color: #2c3e50; }
+                  a { color: #0366d6; text-decoration: none; }
+                  a:hover { text-decoration: underline; }
+                  footer { margin-top: 40px; font-size: 0.9em; color: #555; }
+              </style>
+          </head>
+          <body>
+              <h1>Heavens Above - Documentation</h1>
+              <p>This page contains the latest generated documentation for the Heavens Above project.</p>
+              <hr>
+              <h2>Overview</h2>
+              <p>The project gathers astronomical data from multiple sources and structures it for analysis or display.</p>
+
+              <h2>Project Files</h2>
+              <ul>
+          EOF
+
+          # Add markdown files as links
+          find . -name "*.md" -not -path "./node_modules/*" -not -path "./docs-site/*" | while read file; do
+            filename=$(basename "$file")
+            echo "<li><a href=\"$filename\">$filename</a></li>" >> docs-site/index.html
+            cp "$file" "docs-site/$filename"
+          done
+
+          cat >> docs-site/index.html <<'EOF'
+              </ul>
+              <footer>
+                  <p>Last updated: $(date)</p>
+              </footer>
+          </body>
+          </html>
+          EOF
+
+          echo "✅ Documentation site built successfully."
+
+      - name: Upload Artifact for Deployment
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-site
 
   deploy-docs:
     name: Deploy to GitHub Pages
@@ -125,36 +91,26 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    
+
     steps:
-    - name: Deploy to GitHub Pages
-      id: deployment
-      uses: actions/deploy-pages@v4
+      - name: Deploy Documentation
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   validate-docs:
-    name: Validate Documentation
+    name: Validate Documentation Structure
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Check markdown files
-      run: |
-        echo " Validating documentation files..."
-        
-        # Check if README exists
-        if [ -f "README.md" ]; then
-          echo " README.md found"
-          echo " README size: $(wc -l < README.md) lines"
-        else
-          echo " README.md not found"
-        fi
-        
-        # Check for other markdown files
-        MD_FILES=$(find . -name "*.md" -not -path "./node_modules/*" | wc -l)
-        echo " Total markdown files: $MD_FILES"
-        
-        # Basic markdown validation
-        echo " Documentation structure:"
-        find . -name "*.md" -not -path "./node_modules/*" -exec echo "   - {}" \;
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate Markdown Files
+        run: |
+          echo "🔍 Validating documentation files..."
+          MD_COUNT=$(find . -name "*.md" -not -path "./node_modules/*" | wc -l)
+          if [ "$MD_COUNT" -eq 0 ]; then
+            echo "⚠️ No markdown files found in repository."
+          else
+            echo "✅ Found $MD_COUNT markdown files:"
+            find . -name "*.md" -not -path "./node_modules/*" -exec echo " - {}" \;
+          fi
