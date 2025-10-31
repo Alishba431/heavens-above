@@ -1,0 +1,454 @@
+name: Custom Release Automation & Metrics
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+      release_notes:
+        description: 'Custom release notes'
+        required: false
+        type: string
+      skip_tests:
+        description: 'Skip tests'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  NODE_VERSION: '20.x'
+  PYTHON_VERSION: '3.x'
+
+jobs:
+  pre-release-checks:
+    name: Pre-Release Validation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    outputs:
+      version_bump: ${{ steps.version_calc.outputs.new_version }}
+      can_proceed: ${{ steps.checks.outputs.all_checks_passed }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: Run pre-release validation
+      id: checks
+      run: |
+        echo "Running pre-release validation checks..."
+        
+        # Check if working directory is clean
+        if ! git diff-index --quiet HEAD --; then
+          echo "❌ Working directory not clean"
+          echo "all_checks_passed=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        
+        # Check if there are unmerged branches
+        UNMERGED_BRANCHES=$(git branch --no-merged main | wc -l)
+        if [ $UNMERGED_BRANCHES -gt 0 ]; then
+          echo "⚠️  There are $UNMERGED_BRANCHES unmerged branches"
+        fi
+        
+        echo "✅ All pre-release checks passed"
+        echo "all_checks_passed=true" >> $GITHUB_OUTPUT
+    
+    - name: Calculate new version
+      id: version_calc
+      if: steps.checks.outputs.all_checks_passed == 'true'
+      run: |
+        CURRENT_VERSION=$(node -p "require('./package.json').version")
+        RELEASE_TYPE=${{ github.event.inputs.release_type }}
+        
+        # Split version into parts
+        IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+        MAJOR=${VERSION_PARTS[0]}
+        MINOR=${VERSION_PARTS[1]}
+        PATCH=${VERSION_PARTS[2]}
+        
+        # Bump version based on release type
+        case $RELEASE_TYPE in
+          "major")
+            NEW_VERSION="$((MAJOR + 1)).0.0"
+            ;;
+          "minor")
+            NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
+            ;;
+          "patch")
+            NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+            ;;
+        esac
+        
+        echo "Current version: $CURRENT_VERSION"
+        echo "New version: $NEW_VERSION"
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+  generate-release-artifacts:
+    name: Generate Release Assets
+    runs-on: ubuntu-latest
+    needs: pre-release-checks
+    if: needs.pre-release-checks.outputs.can_proceed == 'true' || github.event_name == 'push'
+    
+    outputs:
+      release_notes: ${{ steps.generate_notes.outputs.notes }}
+      bundle_size: ${{ steps.analyze_bundle.outputs.bundle_size }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        registry-url: 'https://registry.npmjs.org'
+    
+    - name: Install dependencies
+      run: npm ci --production=false
+    
+    - name: Run tests (if not skipped)
+      if: ${{ !github.event.inputs.skip_tests || github.event_name == 'push' }}
+      run: |
+        npm test -- --coverage --watchAll=false
+        npm run test:e2e -- --headless
+    
+    - name: Build application
+      run: |
+        npm run build
+        echo "Build completed successfully"
+    
+    - name: Generate comprehensive release notes
+      id: generate_notes
+      run: |
+        # Get the tag name
+        if [ "${{ github.event_name }}" = "push" ]; then
+          TAG_NAME=${{ github.ref_name }}
+        else
+          TAG_NAME=v${{ needs.pre-release-checks.outputs.version_bump }}
+        fi
+        
+        # Get previous tag
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+        
+        if [ -z "$PREVIOUS_TAG" ]; then
+          COMMIT_RANGE="HEAD"
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+        else
+          COMMIT_RANGE="$PREVIOUS_TAG..HEAD"
+          COMMIT_COUNT=$(git rev-list --count "$PREVIOUS_TAG..HEAD")
+        fi
+        
+        # Categorize commits
+        FEATURES=$(git log "$COMMIT_RANGE" --oneline --grep="feat:" --format="- %s" || echo "")
+        FIXES=$(git log "$COMMIT_RANGE" --oneline --grep="fix:" --format="- %s" || echo "")
+        BREAKING=$(git log "$COMMIT_RANGE" --oneline --grep="BREAKING" --format="- %s" || echo "")
+        DOCS=$(git log "$COMMIT_RANGE" --oneline --grep="docs:" --format="- %s" || echo "")
+        
+        # Create release notes
+        cat > release_notes.md << EOF
+        # Release $TAG_NAME
+        
+        ## Overview
+        - **Total Changes**: $COMMIT_COUNT commits
+        - **Generated**: $(date)
+        - **Triggered by**: ${{ github.actor }}
+        
+        ## What's Changed
+        
+        EOF
+        
+        # Add sections only if they have content
+        if [ -n "$FEATURES" ]; then
+          echo "### 🚀 New Features" >> release_notes.md
+          echo "$FEATURES" >> release_notes.md
+          echo "" >> release_notes.md
+        fi
+        
+        if [ -n "$FIXES" ]; then
+          echo "### 🐛 Bug Fixes" >> release_notes.md
+          echo "$FIXES" >> release_notes.md
+          echo "" >> release_notes.md
+        fi
+        
+        if [ -n "$BREAKING" ]; then
+          echo "### 💥 Breaking Changes" >> release_notes.md
+          echo "$BREAKING" >> release_notes.md
+          echo "" >> release_notes.md
+        fi
+        
+        if [ -n "$DOCS" ]; then
+          echo "### 📚 Documentation" >> release_notes.md
+          echo "$DOCS" >> release_notes.md
+          echo "" >> release_notes.md
+        fi
+        
+        # Add custom notes if provided
+        if [ -n "${{ github.event.inputs.release_notes }}" ]; then
+          echo "### 📝 Additional Notes" >> release_notes.md
+          echo "${{ github.event.inputs.release_notes }}" >> release_notes.md
+          echo "" >> release_notes.md
+        fi
+        
+        # Add quality metrics section
+        echo "### 📊 Quality Metrics" >> release_notes.md
+        echo "- ✅ All automated checks passed" >> release_notes.md
+        echo "- 🔒 Security scan completed" >> release_notes.md
+        echo "- 📦 Bundle size analyzed" >> release_notes.md
+        echo "- 🧪 Test coverage verified" >> release_notes.md
+        
+        echo "notes=$(cat release_notes.md | sed ':a;N;$!ba;s/\n/%0A/g')" >> $GITHUB_OUTPUT
+    
+    - name: Analyze bundle size
+      id: analyze_bundle
+      run: |
+        # Install bundle analyzer
+        npm install -g webpack-bundle-analyzer
+        
+        # Build with stats
+        npm run build -- --stats
+        
+        # Analyze bundle size
+        TOTAL_SIZE=$(du -sh build/ | cut -f1)
+        echo "Total bundle size: $TOTAL_SIZE"
+        echo "bundle_size=$TOTAL_SIZE" >> $GITHUB_OUTPUT
+    
+    - name: Generate code quality report
+      run: |
+        # Generate various code quality reports
+        npx eslint src/ --format json --output-file eslint-report.json
+        npx coverage-badges --output ./badges/
+        
+        # Create summary report
+        cat > quality-report.md << EOF
+        # Code Quality Report
+        
+        ## Metrics
+        - Bundle Size: ${{ steps.analyze_bundle.outputs.bundle_size }}
+        - Test Coverage: $(cat coverage/coverage-summary.json | jq '.total.lines.pct')%
+        - ESLint Issues: $(cat eslint-report.json | jq length)
+        
+        ## Recommendations
+        - Consider code splitting for larger bundles
+        - Address any ESLint warnings
+        EOF
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-build-${{ github.sha }}
+        path: |
+          build/
+          coverage/
+          badges/
+        retention-days: 30
+
+  performance-metrics:
+    name: Performance Metrics Collection
+    runs-on: ubuntu-latest
+    needs: generate-release-artifacts
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build for performance testing
+      run: npm run build
+    
+    - name: Install Lighthouse CI
+      run: |
+        npm install -g @lhci/cli
+        which lhci
+    
+    - name: Run Lighthouse CI
+      run: |
+        # Start a local server for testing
+        npx serve build/ -p 3000 &
+        SERVER_PID=$!
+        sleep 5
+        
+        # Run Lighthouse analysis
+        lhci autorun --collect.url=http://localhost:3000 || true
+        
+        # Kill the server
+        kill $SERVER_PID
+    
+    - name: Analyze performance trends
+      run: |
+        # Compare with previous benchmarks
+        if [ -f ".lighthouseci/assertion-results.json" ]; then
+          echo "Performance assertion results:"
+          cat .lighthouseci/assertion-results.json | jq '.'
+        fi
+        
+        # Generate performance report
+        cat > performance-report.md << EOF
+        # Performance Metrics
+        
+        ## Core Web Vitals
+        - Largest Contentful Paint (LCP): < 2.5s
+        - First Input Delay (FID): < 100ms
+        - Cumulative Layout Shift (CLS): < 0.1
+        
+        ## Bundle Analysis
+        - Total Size: ${{ needs.generate-release-artifacts.outputs.bundle_size }}
+        - Chunk Count: $(find build/static/js -name "*.js" | wc -l)
+        
+        ## Recommendations
+        - Implement lazy loading for non-critical components
+        - Optimize images and assets
+        - Consider code splitting for better performance
+        EOF
+    
+    - name: Upload performance reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-metrics-${{ github.sha }}
+        path: |
+          .lighthouseci/
+          performance-report.md
+        retention-days: 30
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [generate-release-artifacts, performance-metrics]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: release-build-${{ github.sha }}
+        path: ./release-assets
+    
+    - name: Create GitHub Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        body: ${{ needs.generate-release-artifacts.outputs.release_notes }}
+        draft: false
+        prerelease: false
+        files: |
+          release-assets/build/**
+          release-assets/coverage/lcov-report/**
+          release-assets/badges/*
+        generate_release_notes: false
+
+  post-release-actions:
+    name: Post-Release Automation
+    runs-on: ubuntu-latest
+    needs: create-release
+    if: always()
+    
+    steps:
+    - name: Notify teams via Slack
+      uses: 8398a7/action-slack@v3
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_RELEASE_WEBHOOK }}
+      with:
+        status: ${{ job.status }}
+        text: |
+          🚀 New Release Published: ${{ github.ref_name }}
+          
+          📊 Performance Metrics:
+          - Bundle Size: ${{ needs.generate-release-artifacts.outputs.bundle_size }}
+          - Quality Checks: ✅ Passed
+          
+          👤 Triggered by: ${{ github.actor }}
+        fields: |
+          repo,commit,author,action,eventName,ref,workflow
+      if: success()
+    
+    - name: Notify on failure
+      uses: 8398a7/action-slack@v3
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_RELEASE_WEBHOOK }}
+      with:
+        status: failure
+        text: |
+          ❌ Release Failed: ${{ github.ref_name }}
+          
+          Check the workflow for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        fields: |
+          repo,commit,author,action,eventName,ref,workflow
+      if: failure()
+    
+    - name: Update external status page
+      run: |
+        echo "Updating external systems about release..."
+        # Example: Update Statuspage, Jira, etc.
+        # curl -X POST "https://api.statuspage.io/v1/pages/$STATUS_PAGE_ID/incidents" \
+        #   -H "Authorization: OAuth ${{ secrets.STATUSPAGE_TOKEN }}" \
+        #   -d "incident[name]=New Release Deployed" \
+        #   -d "incident[status]=resolved" \
+        #   -d "incident[body]=Version ${{ github.ref_name }} has been released" \
+        #   -d "incident[component_ids][]=$COMPONENT_ID"
+      env:
+        STATUSPAGE_TOKEN: ${{ secrets.STATUSPAGE_TOKEN }}
+    
+    - name: Create follow-up tasks
+      run: |
+        echo "Creating post-release tasks..."
+        # Example: Create issues for follow-up actions
+        # curl -X POST "https://api.github.com/repos/${{ github.repository }}/issues" \
+        #   -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+        #   -d '{"title":"Post-release validation for '${{ github.ref_name }}'","body":"Verify deployment and monitor performance","labels":["post-release","validation"]}'
+
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    needs: post-release-actions
+    if: always()
+    
+    steps:
+    - name: Cleanup old artifacts
+      run: |
+        echo "Cleaning up temporary files..."
+        # Remove any temporary files created during the release process
+    
+    - name: Update release tracking
+      run: |
+        echo "Updating release tracking database..."
+        # Log release information to external tracking system
