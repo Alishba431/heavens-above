@@ -3,10 +3,10 @@ name: Deploy Documentation
 on:
   push:
     branches:
-      - main  # run when you push to main
+      - main  # or your default branch
 
 permissions:
-  contents: write  # allow push to gh-pages branch
+  contents: write
 
 jobs:
   build-deploy:
@@ -16,16 +16,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Generate documentation site
+      - name: Setup Node.js (for static site tools)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install documentation generator
         run: |
-          mkdir -p public
-          echo "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Heavens Above Docs</title></head><body>" > public/index.html
-          echo "<article style='max-width:800px;margin:auto;font-family:sans-serif;line-height:1.6'>" >> public/index.html
-          npx marked README.md >> public/index.html
-          echo "</article></body></html>" >> public/index.html
+          npm install -g markdown-to-html-cli
+
+      - name: Generate HTML from Markdown
+        run: |
+          mkdir -p docs
+          markdown-to-html README.md -o docs/index.html
+          echo "<meta http-equiv='refresh' content='0; url=docs/index.html'>" > index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
+          publish_dir: ./docs
