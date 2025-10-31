@@ -3,10 +3,10 @@ name: Deploy Docs to GitHub Pages
 on:
   push:
     branches:
-      - main  # or your default branch
+      - main
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -22,17 +22,14 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install and build
+      - name: Build docs
         run: |
-          npm install
           mkdir dist
           cp README.md dist/index.md
-          npx docsify-cli init ./dist
-          # OR use another generator (mkdocs, docusaurus, etc.)
-      
+          echo "<!DOCTYPE html><html><body><h1>Heavens Above Docs</h1><pre>$(cat README.md)</pre></body></html>" > dist/index.html
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
-
