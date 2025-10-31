@@ -2,36 +2,37 @@ name: Deploy Documentation
 
 on:
   push:
-    branches: [ main ]
-    paths:
-      - 'docs/**'       # ✅ Runs only when documentation changes
-  workflow_dispatch:     # ✅ Allows manual trigger from Actions tab
+    branches:
+      - main  # or your default branch
 
 permissions:
-  contents: write        # ✅ Required for pushing to gh-pages branch
+  contents: write
 
 jobs:
-  build-and-deploy:
+  build-deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js (for static site tools)
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: 18
 
-      - name: Build documentation
+      - name: Install documentation generator
         run: |
-          mkdir -p public
-          cp -r docs/* public/
-          echo "✅ Documentation prepared in public/ folder"
+          npm install -g markdown-to-html-cli
+
+      - name: Generate HTML from Markdown
+        run: |
+          mkdir -p docs
+          markdown-to-html README.md -o docs/index.html
+          echo "<meta http-equiv='refresh' content='0; url=docs/index.html'>" > index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
-          publish_branch: gh-pages
+          publish_dir: ./docs
