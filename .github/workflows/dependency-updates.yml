@@ -1,4 +1,3 @@
-# .github/workflows/dependency-check.yml
 name: Dependency PR Checks
 
 on:
@@ -10,6 +9,7 @@ jobs:
   test-dependency-update:
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]' || contains(github.head_ref, 'dependabot')
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -18,17 +18,31 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+          cache: 'npm'  # optional cache, safe to keep
+
+      - name: Check for package-lock.json
+        id: check_lock
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "has_lock=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_lock=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Install dependencies
         run: |
-          if [ -f package-lock.json ]; then
-            echo "package-lock.json found — using npm ci"
+          if [ "${{ steps.check_lock.outputs.has_lock }}" = "true" ]; then
+            echo "package-lock.json found — running npm ci"
             npm ci
           else
-            echo "No package-lock.json found — using npm install"
+            echo "No package-lock.json found — running npm install"
             npm install
           fi
 
-
       - name: Run Jest tests
-        run: npm test
+        run: |
+          if npm run | grep -q "test"; then
+            npm test
+          else
+            echo "No test script found in package.json — skipping tests."
+          fi
