@@ -1,35 +1,37 @@
-name: Deploy Docs to GitHub Pages
+name: Deploy Documentation
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+    paths:
+      - 'docs/**'       # ✅ Runs only when documentation changes
+  workflow_dispatch:     # ✅ Allows manual trigger from Actions tab
 
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: write        # ✅ Required for pushing to gh-pages branch
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      - name: Build docs
+      - name: Build documentation
         run: |
-          mkdir dist
-          cp README.md dist/index.md
-          echo "<!DOCTYPE html><html><body><h1>Heavens Above Docs</h1><pre>$(cat README.md)</pre></body></html>" > dist/index.html
+          mkdir -p public
+          cp -r docs/* public/
+          echo "✅ Documentation prepared in public/ folder"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
+          publish_dir: ./public
+          publish_branch: gh-pages
