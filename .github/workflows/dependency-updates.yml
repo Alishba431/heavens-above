@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened]
     branches: [ main ]
   workflow_dispatch:
+
 jobs:
   test-dependency-update:
     runs-on: ubuntu-latest
@@ -18,31 +19,80 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'  # optional cache, safe to keep
+          # REMOVED cache: 'npm' since there's no lock file
 
-      - name: Check for package-lock.json
-        id: check_lock
+      - name: Check for lock files
+        id: check_files
         run: |
-          if [ -f package-lock.json ]; then
+          echo "Checking for package manager files..."
+          if [ -f "package-lock.json" ]; then
+            echo "lock_file=package-lock.json" >> $GITHUB_OUTPUT
+            echo "has_lock=true" >> $GITHUB_OUTPUT
+          elif [ -f "yarn.lock" ]; then
+            echo "lock_file=yarn.lock" >> $GITHUB_OUTPUT
+            echo "has_lock=true" >> $GITHUB_OUTPUT
+          elif [ -f "pnpm-lock.yaml" ]; then
+            echo "lock_file=pnpm-lock.yaml" >> $GITHUB_OUTPUT
             echo "has_lock=true" >> $GITHUB_OUTPUT
           else
+            echo "lock_file=none" >> $GITHUB_OUTPUT
             echo "has_lock=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Check if package.json exists
+          if [ -f "package.json" ]; then
+            echo "has_package_json=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_package_json=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Install dependencies
+        if: steps.check_files.outputs.has_package_json == 'true'
         run: |
-          if [ "${{ steps.check_lock.outputs.has_lock }}" = "true" ]; then
-            echo "package-lock.json found — running npm ci"
-            
+          echo "Installing dependencies..."
+          if [ "${{ steps.check_files.outputs.has_lock }}" = "true" ]; then
+            echo "Lock file found: ${{ steps.check_files.outputs.lock_file }}"
+            npm install
           else
-            echo "No package-lock.json found — running npm install"
+            echo "No lock file found - running npm install"
             npm install
           fi
+          echo "✅ Dependencies installed successfully"
 
-      - name: Run Jest tests
+      - name: Skip installation (no package.json)
+        if: steps.check_files.outputs.has_package_json == 'false'
+        run: |
+          echo "📝 No package.json found - skipping dependency installation"
+          echo "This repository doesn't use Node.js dependencies"
+
+      - name: Check for test script
+        id: check_test
+        if: steps.check_files.outputs.has_package_json == 'true'
         run: |
           if npm run | grep -q "test"; then
-            npm test
+            echo "has_test_script=true" >> $GITHUB_OUTPUT
           else
-            echo "No test script found in package.json — skipping tests."
+            echo "has_test_script=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run tests
+        if: steps.check_files.outputs.has_test_script == 'true'
+        run: |
+          echo "Running tests..."
+          npm test
+
+      - name: Skip tests
+        if: steps.check_files.outputs.has_test_script == 'false' && steps.check_files.outputs.has_package_json == 'true'
+        run: |
+          echo "📝 No test script found in package.json - skipping tests"
+
+      - name: Build check
+        if: steps.check_files.outputs.has_package_json == 'true'
+        run: |
+          if npm run | grep -q "build"; then
+            echo "Running build..."
+            npm run build
+            echo "✅ Build completed successfully"
+          else
+            echo "No build script found"
           fi
