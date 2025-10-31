@@ -1,70 +1,31 @@
-name: Documentation Deployment
+name: Deploy Documentation
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main  # run when you push to main
+
+permissions:
+  contents: write  # allow push to gh-pages branch
 
 jobs:
-  deploy-docs:
+  build-deploy:
     runs-on: ubuntu-latest
-    
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build documentation
+      - name: Generate documentation site
         run: |
-          mkdir -p site
-          
-          # Copy public folder if it exists
-          if [ -d "public" ]; then
-            cp -r public/* site/
-          fi
-          
-          # Copy markdown files
-          find . -maxdepth 1 -name "*.md" -exec cp {} site/ \; 2>/dev/null || true
-          find . -maxdepth 1 -name "*.rst" -exec cp {} site/ \; 2>/dev/null || true
-          
-          # If there's a docs folder, copy it
-          if [ -d "docs" ]; then
-            cp -r docs/* site/ 2>/dev/null || true
-          fi
-          
-          # Create a basic index.html if none exists
-          if [ ! -f "site/index.html" ] && [ ! -f "site/index.md" ]; then
-            cat > site/index.html << EOF
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Documentation</title>
-    <meta charset="UTF-8">
-</head>
-<body>
-    <h1>Documentation</h1>
-    <p>Automatically deployed documentation.</p>
-    <ul>
-        <li><a href='README.md'>README</a></li>
-    </ul>
-</body>
-</html>
-EOF
-          fi
-          
-          echo "Site contents:"
-          ls -la site/
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./site
+          mkdir -p public
+          echo "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Heavens Above Docs</title></head><body>" > public/index.html
+          echo "<article style='max-width:800px;margin:auto;font-family:sans-serif;line-height:1.6'>" >> public/index.html
+          npx marked README.md >> public/index.html
+          echo "</article></body></html>" >> public/index.html
 
       - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
