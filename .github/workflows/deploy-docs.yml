@@ -3,7 +3,7 @@ name: Deploy Documentation
 on:
   push:
     branches:
-      - main  # or your default branch
+      - main
 
 permissions:
   contents: write
@@ -16,23 +16,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (for static site tools)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: Install documentation generator
-        run: |
-          npm install -g markdown-to-html-cli
+      - name: Install markdown-to-html tool
+        run: npm install -g markdown-to-html-cli
 
-      - name: Generate HTML from Markdown
+      - name: Generate HTML from README
         run: |
-          mkdir -p docs
-          markdown-to-html README.md -o docs/index.html
-          echo "<meta http-equiv='refresh' content='0; url=docs/index.html'>" > index.html
+          mkdir -p site
+          markdown-to-html README.md -o site/index.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
+          publish_dir: ./site
