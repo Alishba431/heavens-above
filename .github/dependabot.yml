@@ -8,4 +8,4 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     reviewers:
-      - "Alishba431"   # optional: assign yourself
+      - "Alishba431"   
