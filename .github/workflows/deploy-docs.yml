@@ -9,36 +9,83 @@ on:
 jobs:
   deploy-docs:
     runs-on: ubuntu-latest
+    
+    # Add permissions for GitHub Pages
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper Git info
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install || echo "No dependencies to install"
-
-      - name: Build documentation (collect only needed files)
         run: |
+          # Check if package.json exists and install dependencies
+          if [ -f "package.json" ]; then
+            npm ci
+          else
+            echo "No package.json found, skipping npm install"
+          fi
+
+      - name: Build documentation
+        run: |
+          # Create site directory
           mkdir -p site
+          
+          # Copy public folder if it exists
+          if [ -d "public" ]; then
+            cp -r public/* site/
+          fi
+          
+          # Copy markdown files
+          find . -maxdepth 1 -name "*.md" -exec cp {} site/ \; 2>/dev/null || true
+          find . -maxdepth 1 -name "*.rst" -exec cp {} site/ \; 2>/dev/null || true
+          
+          # If there's a docs folder, copy it
+          if [ -d "docs" ]; then
+            cp -r docs/* site/ 2>/dev/null || true
+          fi
+          
+          # Create a basic index.html if none exists
+          if [ ! -f "site/index.html" ] && [ ! -f "site/index.md" ]; then
+            echo "<!DOCTYPE html>
+            <html>
+            <head>
+                <title>Documentation</title>
+            </head>
+            <body>
+                <h1>Documentation</h1>
+                <p>Automatically deployed documentation.</p>
+                <ul>
+                    <li><a href='README.md'>README</a></li>
+                </ul>
+            </body>
+            </html>" > site/index.html
+          fi
+          
+          echo "Site structure:"
+          find site -type f | sort
 
-          # Copy entire public folder contents into site/
-          cp -r public/* site/ 2>/dev/null || true
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
 
-          # Copy markdown docs
-          cp *.md site/ 2>/dev/null || true
-          cp *.rst site/ 2>/dev/null || true
-
-          echo "Site contents:"
-          ls -R site
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4.0.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          force_orphan: true
+        id: deployment
+        uses: actions/deploy-pages@v4
+        # Only deploy on push to main, not on pull requests
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
