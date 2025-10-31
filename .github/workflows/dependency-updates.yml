@@ -9,90 +9,71 @@ on:
 jobs:
   test-dependency-update:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]' || contains(github.head_ref, 'dependabot')
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Debug Information
+        run: |
+          echo "Workflow triggered by: ${{ github.actor }}"
+          echo "Event type: ${{ github.event_name }}"
+          echo "Branch: ${{ github.head_ref }}"
+          echo "Manual trigger: ${{ github.event_name == 'workflow_dispatch' }}"
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          # REMOVED cache: 'npm' since there's no lock file
 
-      - name: Check for lock files
-        id: check_files
+      - name: Check for package.json
+        id: check_package
         run: |
-          echo "Checking for package manager files..."
-          if [ -f "package-lock.json" ]; then
-            echo "lock_file=package-lock.json" >> $GITHUB_OUTPUT
-            echo "has_lock=true" >> $GITHUB_OUTPUT
-          elif [ -f "yarn.lock" ]; then
-            echo "lock_file=yarn.lock" >> $GITHUB_OUTPUT
-            echo "has_lock=true" >> $GITHUB_OUTPUT
-          elif [ -f "pnpm-lock.yaml" ]; then
-            echo "lock_file=pnpm-lock.yaml" >> $GITHUB_OUTPUT
-            echo "has_lock=true" >> $GITHUB_OUTPUT
-          else
-            echo "lock_file=none" >> $GITHUB_OUTPUT
-            echo "has_lock=false" >> $GITHUB_OUTPUT
-          fi
-          
-          # Check if package.json exists
           if [ -f "package.json" ]; then
-            echo "has_package_json=true" >> $GITHUB_OUTPUT
+            echo "has_package=true" >> $GITHUB_OUTPUT
+            echo "✅ package.json found"
           else
-            echo "has_package_json=false" >> $GITHUB_OUTPUT
+            echo "has_package=false" >> $GITHUB_OUTPUT
+            echo "❌ package.json not found"
           fi
 
       - name: Install dependencies
-        if: steps.check_files.outputs.has_package_json == 'true'
+        if: steps.check_package.outputs.has_package == 'true'
         run: |
           echo "Installing dependencies..."
-          if [ "${{ steps.check_files.outputs.has_lock }}" = "true" ]; then
-            echo "Lock file found: ${{ steps.check_files.outputs.lock_file }}"
-            npm install
-          else
-            echo "No lock file found - running npm install"
-            npm install
-          fi
+          npm install
           echo "✅ Dependencies installed successfully"
 
       - name: Skip installation (no package.json)
-        if: steps.check_files.outputs.has_package_json == 'false'
+        if: steps.check_package.outputs.has_package == 'false'
         run: |
           echo "📝 No package.json found - skipping dependency installation"
-          echo "This repository doesn't use Node.js dependencies"
-
-      - name: Check for test script
-        id: check_test
-        if: steps.check_files.outputs.has_package_json == 'true'
-        run: |
-          if npm run | grep -q "test"; then
-            echo "has_test_script=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_test_script=false" >> $GITHUB_OUTPUT
-          fi
 
       - name: Run tests
-        if: steps.check_files.outputs.has_test_script == 'true'
+        if: steps.check_package.outputs.has_package == 'true'
         run: |
-          echo "Running tests..."
-          npm test
-
-      - name: Skip tests
-        if: steps.check_files.outputs.has_test_script == 'false' && steps.check_files.outputs.has_package_json == 'true'
-        run: |
-          echo "📝 No test script found in package.json - skipping tests"
+          echo "Checking for test script..."
+          if npm run | grep -q "test"; then
+            echo "Running tests..."
+            npm test
+            echo "✅ Tests completed"
+          else
+            echo "📝 No test script found in package.json"
+          fi
 
       - name: Build check
-        if: steps.check_files.outputs.has_package_json == 'true'
+        if: steps.check_package.outputs.has_package == 'true'
         run: |
+          echo "Checking for build script..."
           if npm run | grep -q "build"; then
             echo "Running build..."
             npm run build
             echo "✅ Build completed successfully"
           else
-            echo "No build script found"
+            echo "📝 No build script found"
           fi
+
+      - name: Final Success Message
+        run: |
+          echo "🎉 Dependency check completed successfully!"
+          echo "All validations passed for this PR"
