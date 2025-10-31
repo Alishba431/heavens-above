@@ -1,36 +1,44 @@
-name: Deploy Documentation
+name: Documentation Deployment
 
 on:
   push:
-    branches:
-      - main
-
-permissions:
-  contents: write
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
-  build-deploy:
+  deploy-docs:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: '18'
 
-      - name: Install markdown-to-html tool
-        run: npm install -g markdown-to-html-cli
+      - name: Install dependencies
+        run: npm install || echo "No dependencies to install"
 
-      - name: Generate HTML from README
+      - name: Build documentation (collect only needed files)
         run: |
           mkdir -p site
-          markdown-to-html README.md -o site/index.html
+
+          # Copy entire public folder contents into site/
+          cp -r public/* site/ 2>/dev/null || true
+
+          # Copy markdown docs
+          cp *.md site/ 2>/dev/null || true
+          cp *.rst site/ 2>/dev/null || true
+
+          echo "Site contents:"
+          ls -R site
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@v4.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./site
+          force_orphan: true
