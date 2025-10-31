@@ -3,7 +3,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"  # or "daily" for more frequent checks
+      interval: "weekly"  # or "daily" for more frequent chec
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
