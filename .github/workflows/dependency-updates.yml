@@ -20,7 +20,15 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json found — using npm ci"
+            npm ci
+          else
+            echo "No package-lock.json found — using npm install"
+            npm install
+          fi
+
 
       - name: Run Jest tests
         run: npm test
